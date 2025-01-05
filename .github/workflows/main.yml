@@ -5,39 +5,37 @@ on:
 
 jobs:
   setup-rdp-tunnel:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
     - name: Check out the repository
       uses: actions/checkout@v2
 
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget openssh-server xrdp
+
     - name: Download and Install Playit
       run: |
-        Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe" -OutFile "$env:USERPROFILE\playit.exe"
-        Start-Sleep -Seconds 5  # Give some time for the download to complete
+        wget -O playit https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-linux-x86_64
+        chmod +x playit
+        sudo mv playit /usr/local/bin/
 
-        
-    # Default, optional.
-    - name: Enable TS
-      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
-    - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-    - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-    - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "p@ssw0rd!" -Force)
+    - name: Configure xRDP and SSH
+      run: |
+        sudo systemctl enable xrdp
+        sudo systemctl start xrdp
+        sudo systemctl enable ssh
+        sudo systemctl start ssh
 
     - name: Start Playit and Set Up RDP Tunnel
       env:
-        PLAYIT_AUTH_KEY: ${{ secrets.PL }} 
+        PLAYIT_AUTH_KEY: ${{ secrets.PL }}
       run: |
-        Start-Process -FilePath "$env:USERPROFILE\playit.exe" -ArgumentList "--secret $env:PLAYIT_AUTH_KEY" -NoNewWindow -Wait
-        Start-Process -FilePath "$env:USERPROFILE\playit.exe" -NoNewWindow
+        nohup playit --secret $PLAYIT_AUTH_KEY &
 
-        
-    # Prevent workflow to stop
+    # Prevent workflow from stopping
     - name: Keep the GitHub Action Runner Alive
       run: |
-          Start-Sleep -Seconds 11800  # Adjust the duration based on your needs
-
-
-
-
-        
+        sleep 11800  # Adjust the duration as needed
