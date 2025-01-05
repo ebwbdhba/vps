@@ -5,37 +5,43 @@ on:
 
 jobs:
   setup-rdp-tunnel:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
+    # Descargar el repositorio (si es necesario)
     - name: Check out the repository
       uses: actions/checkout@v2
 
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wget openssh-server xrdp
-
+    # Descargar e instalar Playit
     - name: Download and Install Playit
       run: |
-        wget -O playit https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-linux-x86_64
-        chmod +x playit
-        sudo mv playit /usr/local/bin/
+        # Descargar el ejecutable de Playit para Windows
+        Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe" -OutFile "$env:USERPROFILE\playit.exe"
+        # Esperar unos segundos para asegurar que se descargue correctamente
+        Start-Sleep -Seconds 5
 
-    - name: Configure xRDP and SSH
+    # Configurar Remote Desktop Protocol (RDP) en Windows
+    - name: Enable Remote Desktop
       run: |
-        sudo systemctl enable xrdp
-        sudo systemctl start xrdp
-        sudo systemctl enable ssh
-        sudo systemctl start ssh
+        # Habilitar conexiones RDP
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        # Habilitar reglas del firewall para RDP
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        # Configurar autenticación de usuario para RDP
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+        # Configurar una contraseña para el usuario "runneradmin"
+        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "p@ssw0rd!" -Force)
 
+    # Iniciar Playit y configurar el túnel RDP
     - name: Start Playit and Set Up RDP Tunnel
       env:
-        PLAYIT_AUTH_KEY: ${{ secrets.PL }}
+        PLAYIT_AUTH_KEY: ${{ secrets.PL }}  # Asegúrate de configurar este secreto en tu repositorio
       run: |
-        nohup playit --secret $PLAYIT_AUTH_KEY &
+        # Iniciar Playit con la clave secreta proporcionada por los secretos del repositorio
+        Start-Process -FilePath "$env:USERPROFILE\playit.exe" -ArgumentList "--secret $env:PLAYIT_AUTH_KEY" -NoNewWindow -Wait
 
-    # Prevent workflow from stopping
+    # Mantener vivo el runner para permitir acceso remoto durante el tiempo deseado
     - name: Keep the GitHub Action Runner Alive
       run: |
-        sleep 11800  # Adjust the duration as needed
+        # Mantener la acción activa durante aproximadamente 3 horas y 16 minutos (ajusta según sea necesario)
+        Start-Sleep -Seconds 11800
